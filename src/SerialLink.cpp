@@ -23,10 +23,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <Arduino.h>
 #include "SerialLink.h"
+#include <Base64.h>
 
-SerialLink::SerialLink(Stream& serial, bool doACK, char splitChar, char queryChar, char terminateChar): _serial(&serial) {
+SerialLink::SerialLink(Stream& serial, bool doACK, char splitChar, char queryChar, char terminateChar, char base64Char): _serial(&serial) {
     _doACK = doACK;
     _splitChar = splitChar;
+    _base64Char = base64Char;
     _queryChar = queryChar;
     _terminateChar = terminateChar;
     _serial->setTimeout(100);
@@ -48,7 +50,7 @@ void SerialLink::handle() {
             // Find the split char
             int split = 0;
             while (char c = buffer[split]) {
-                if (c == _splitChar) break;
+              if ((c == _splitChar) || (c == _base64Char)) break;
                 ++split;
             }
 
@@ -60,38 +62,44 @@ void SerialLink::handle() {
                 memcpy(key, buffer, split);
                 key[split] = 0;
 
-                // query value
-                if (buffer[split+1] == _queryChar) {
+                if(buffer[split] == _splitChar){
+                  // query value
+                  if (buffer[split+1] == _queryChar) {
 
                     if (_onGet) {
-                        bool response = _onGet(key);
-                        if (_doACK) {
-                            if (!response) sendInvalid();
-                        }
+                      bool response = _onGet(key);
+                      if (_doACK) {
+                        if (!response) sendInvalid();
+                      }
                     }
 
-                // set value
-                } else {
+                    // set value
+                  } else {
 
                     long value = 0;
                     while (char c = buffer[++split]) {
-                        value = 10 * value + c - '0';
+                      value = 10 * value + c - '0';
                     }
                     if (_onSet) {
-                        bool response = _onSet(key, value);
-                        if (_doACK) {
-                            response ? sendOK() : sendInvalid();
-                        }
+                      bool response = _onSet(key, value);
+                      if (_doACK) {
+                        response ? sendOK() : sendInvalid();
+                      }
                     }
-
+                  }
+                } else if(buffer[split] == _base64Char){
+                  char * base64dec[MAX_BUFFER_SIZE];
+                  base64_decode(base64dec, &buffer[split+1], length - (split-1));
+                  if (_onSetByteStream) {
+                    bool response = _onSetByteStream(key, base64dec, (length - (split-1)) * 3 / 4);
+                    if (_doACK) {
+                      response ? sendOK() : sendInvalid();
+                    }
+                  }
                 }
-
             }
-
         }
-
     }
-
 }
 
 void SerialLink::onGet(bool (*callback)(char * command)) {
@@ -121,6 +129,28 @@ bool SerialLink::send(const char * command, long payload, bool doACK) {
 
     char buffer[strlen(command) + 10];
     sprintf(buffer, "%s%c%ld", command, _splitChar, payload);
+    sendRaw(buffer);
+
+    bool response = !doACK;
+    if (doACK) {
+
+        byte b[3];
+        int length = _serial->readBytesUntil(_terminateChar, b, 3);
+        if (length == 2 && b[0] == 'O' && b[1] == 'K') response = true;
+
+    }
+
+    return response;
+
+}
+
+bool SerialLink::sendByteStream(const char * command, const char * payload,
+                                size_t payload_length, bool doACK) {
+
+    char buffer[MAX_BUFFER_SIZE];
+    int pos = sprintf(buffer, "%s%c", command, _base64Char);
+    base64_encode(&buffer[pos], (char *)payload, payload_length);
+
     sendRaw(buffer);
 
     bool response = !doACK;

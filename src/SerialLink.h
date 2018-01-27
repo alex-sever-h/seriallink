@@ -28,8 +28,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define DEFAULT_TERMINATE_CHAR  '\n'
 #define DEFAULT_SPLIT_CHAR      '='
+#define DEFAULT_BASE64_CHAR     '@'
 #define DEFAULT_QUERY_CHAR      '?'
-#define MAX_BUFFER_SIZE         32
+#define MAX_BUFFER_SIZE         (512)
 
 class SerialLink {
 
@@ -39,7 +40,8 @@ class SerialLink {
             bool doACK = true,
             char splitChar = DEFAULT_SPLIT_CHAR,
             char queryChar = DEFAULT_QUERY_CHAR,
-            char terminateChar = DEFAULT_TERMINATE_CHAR);
+            char terminateChar = DEFAULT_TERMINATE_CHAR,
+            char base64Char = DEFAULT_BASE64_CHAR);
 
         void handle();
         void onGet(bool (*callback)(char * command));
@@ -52,6 +54,8 @@ class SerialLink {
         bool send(const char * command, long payload, bool doACK);
         bool send_P(const char * command, long payload);
         bool send_P(const char * command, long payload, bool doACK);
+        bool sendByteStream(const char * command, const char * payload,
+                                        size_t payload_length, bool doACK);
         void sendOK();
         void sendInvalid();
 
@@ -64,10 +68,11 @@ class SerialLink {
         bool _doACK = true;
         char _terminateChar = DEFAULT_TERMINATE_CHAR;
         char _splitChar = DEFAULT_SPLIT_CHAR;
+        char _base64Char= DEFAULT_BASE64_CHAR;
         char _queryChar = DEFAULT_QUERY_CHAR;
         bool (*_onGet)(char *) = NULL;
         bool (*_onSet)(char *, long) = NULL;
-
+        bool (*_onSetByteStream)(char *, char *, size_t) = NULL;
 };
 
 #endif
