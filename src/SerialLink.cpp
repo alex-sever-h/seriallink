@@ -23,7 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <Arduino.h>
 #include "SerialLink.h"
-#include <Base64.h>
+#include <rBase64.h>
 
 SerialLink::SerialLink(Stream& serial, bool doACK, char splitChar, char queryChar, char terminateChar, char base64Char): _serial(&serial) {
     _doACK = doACK;
@@ -88,10 +88,10 @@ void SerialLink::handle() {
                     }
                   }
                 } else if(buffer[split] == _base64Char){
-                  char * base64dec[MAX_BUFFER_SIZE];
-                  base64_decode(base64dec, &buffer[split+1], length - (split-1));
+                  char base64dec[MAX_BUFFER_SIZE];
+                  int len = rbase64_decode(base64dec, (char*)&buffer[split+1], length - (split));
                   if (_onSetByteStream) {
-                    bool response = _onSetByteStream(key, base64dec, (length - (split-1)) * 3 / 4);
+                    bool response = _onSetByteStream(key, base64dec, len);
                     if (_doACK) {
                       response ? sendOK() : sendInvalid();
                     }
@@ -108,6 +108,9 @@ void SerialLink::onGet(bool (*callback)(char * command)) {
 
 void SerialLink::onSet(bool (*callback)(char * command, long payload)) {
     _onSet = callback;
+}
+void SerialLink::onSetByteStream(bool (*callback)(char * command, char * payload, size_t payload_size)) {
+    _onSetByteStream = callback;
 }
 
 void SerialLink::clear() {
@@ -149,7 +152,7 @@ bool SerialLink::sendByteStream(const char * command, const char * payload,
 
     char buffer[MAX_BUFFER_SIZE];
     int pos = sprintf(buffer, "%s%c", command, _base64Char);
-    base64_encode(&buffer[pos], (char *)payload, payload_length);
+    rbase64_encode(&buffer[pos], (char *)payload, payload_length);
 
     sendRaw(buffer);
 

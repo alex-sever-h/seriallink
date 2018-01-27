@@ -46,6 +46,7 @@ class SerialLink {
         void handle();
         void onGet(bool (*callback)(char * command));
         void onSet(bool (*callback)(char * command, long payload));
+        void onSetByteStream(bool (*callback)(char * command, char * payload, size_t payload_size));
         void clear();
 
         void sendRaw(const char * string);
