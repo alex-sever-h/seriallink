@@ -30,7 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define DEFAULT_SPLIT_CHAR      '='
 #define DEFAULT_BASE64_CHAR     '@'
 #define DEFAULT_QUERY_CHAR      '?'
-#define MAX_BUFFER_SIZE         (512)
+#define MAX_BUFFER_SIZE         (100)
 
 class SerialLink {
 
@@ -74,6 +74,8 @@ class SerialLink {
         bool (*_onGet)(char *) = NULL;
         bool (*_onSet)(char *, long) = NULL;
         bool (*_onSetByteStream)(char *, char *, size_t) = NULL;
+
+        int readMessage(byte * buffer);
 };
 
 #endif

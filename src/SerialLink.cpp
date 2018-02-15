@@ -25,82 +25,108 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "SerialLink.h"
 #include <rBase64.h>
 
+static char gBuffer[MAX_BUFFER_SIZE];
+
 SerialLink::SerialLink(Stream& serial, bool doACK, char splitChar, char queryChar, char terminateChar, char base64Char): _serial(&serial) {
     _doACK = doACK;
     _splitChar = splitChar;
     _base64Char = base64Char;
     _queryChar = queryChar;
     _terminateChar = terminateChar;
-    _serial->setTimeout(100);
+    _serial->setTimeout(1);
 }
+
+int SerialLink::readMessage(byte * buffer) {
+  int count;
+
+  count = _serial->available();
+  if (count <= 1)
+    return 0;
+
+  _serial->setTimeout(1);
+  int length = _serial->readBytesUntil(_terminateChar, buffer, MAX_BUFFER_SIZE-1);
+  if (length <= 1)
+    return 0;
+
+  // Convert it to C string
+  buffer[length] = 0;
+  return length;
+}
+
 
 void SerialLink::handle() {
+  byte buffer[MAX_BUFFER_SIZE];
+  int length;
 
-    int count = _serial->available();
-    if (count>1) {
+  length = readMessage(buffer);
+  if(length == 0)
+    return;
 
-        byte buffer[MAX_BUFFER_SIZE];
-        int length = _serial->readBytesUntil(_terminateChar, buffer, MAX_BUFFER_SIZE-1);
+  if(strncmp((const char *)buffer[0], "AT+", 3) != 0) // Not AT comnand
+    return;
 
-        if (length>1) {
+  // Find the split char
+  int split = 0;
+  while (char c = buffer[split]) {
+    if ((c == _splitChar) || (c == _base64Char)) break;
+    ++split;
+  }
 
-            // Convert it to C string
-            buffer[length] = 0;
+  // We expect split char and at least on more char after it
+  if (length - split <= 1)
+    return;
 
-            // Find the split char
-            int split = 0;
-            while (char c = buffer[split]) {
-              if ((c == _splitChar) || (c == _base64Char)) break;
-                ++split;
-            }
+  // key
+  char key[split+1];
+  memcpy(key, buffer, split);
+  key[split] = 0;
 
-            // We expect split char and at least on more char after it
-            if (length - split > 1) {
+#if 1
 
-                // key
-                char key[split+1];
-                memcpy(key, buffer, split);
-                key[split] = 0;
+  if(buffer[split] == _splitChar){
+    // query value
+    if (buffer[split+1] == _queryChar) {
 
-                if(buffer[split] == _splitChar){
-                  // query value
-                  if (buffer[split+1] == _queryChar) {
-
-                    if (_onGet) {
-                      bool response = _onGet(key);
-                      if (_doACK) {
-                        if (!response) sendInvalid();
-                      }
-                    }
-
-                    // set value
-                  } else {
-
-                    long value = 0;
-                    while (char c = buffer[++split]) {
-                      value = 10 * value + c - '0';
-                    }
-                    if (_onSet) {
-                      bool response = _onSet(key, value);
-                      if (_doACK) {
-                        response ? sendOK() : sendInvalid();
-                      }
-                    }
-                  }
-                } else if(buffer[split] == _base64Char){
-                  char base64dec[MAX_BUFFER_SIZE];
-                  int len = rbase64_decode(base64dec, (char*)&buffer[split+1], length - (split));
-                  if (_onSetByteStream) {
-                    bool response = _onSetByteStream(key, base64dec, len);
-                    if (_doACK) {
-                      response ? sendOK() : sendInvalid();
-                    }
-                  }
-                }
-            }
+      if (_onGet) {
+        bool response = _onGet(key);
+        if (_doACK) {
+          //                    if (!response) sendInvalid();
         }
+      }
+
+      // set value
+    } else {
+
+      long value = 0;
+      while (char c = buffer[++split]) {
+        value = 10 * value + c - '0';
+      }
+      if (_onSet) {
+        bool response = _onSet(key, value);
+        if (_doACK) {
+          //         response ? sendOK() : sendInvalid();
+        }
+      }
     }
+  }
+#if 1
+  else if(buffer[split] == _base64Char){
+    int len = rbase64_dec_len((char*)&buffer[split+1], length - (split));
+    char base64dec[len];
+    len = rbase64_decode(base64dec, (char*)&buffer[split+1], length - (split));
+    if (_onSetByteStream) {
+      bool response = _onSetByteStream(key, base64dec, len);
+//      if (_doACK) {
+//        //                response ? sendOK() : sendInvalid();
+//      }
+    }
+  }
+#endif
+#endif
 }
+
+
+
 
 void SerialLink::onGet(bool (*callback)(char * command)) {
     _onGet = callback;
@@ -130,8 +156,8 @@ void SerialLink::sendRaw_P(const char * string) {
 
 bool SerialLink::send(const char * command, long payload, bool doACK) {
 
-    char buffer[strlen(command) + 10];
-    sprintf(buffer, "%s%c%ld", command, _splitChar, payload);
+  char *buffer = gBuffer;
+  snprintf(buffer, MAX_BUFFER_SIZE, "%s%c%ld", command, _splitChar, payload);
     sendRaw(buffer);
 
     bool response = !doACK;
@@ -149,8 +175,7 @@ bool SerialLink::send(const char * command, long payload, bool doACK) {
 
 bool SerialLink::sendByteStream(const char * command, const char * payload,
                                 size_t payload_length, bool doACK) {
-
-    char buffer[MAX_BUFFER_SIZE];
+  char * buffer = gBuffer;
     int pos = sprintf(buffer, "%s%c", command, _base64Char);
     rbase64_encode(&buffer[pos], (char *)payload, payload_length);
 
@@ -172,6 +197,7 @@ bool SerialLink::sendByteStream(const char * command, const char * payload,
 bool SerialLink::send(const char * command, long payload) {
     return send(command, payload, _doACK);
 }
+
 
 bool SerialLink::send_P(const char * command, long payload, bool doACK) {
 
