@@ -62,7 +62,7 @@ void SerialLink::handle() {
   if(length == 0)
     return;
 
-  if(strncmp((const char *)buffer[0], "AT+", 3) != 0) // Not AT comnand
+  if(strncmp((const char *)&buffer[0], "AT+", 3) != 0) // Not AT comnand
     return;
 
   // Find the split char
@@ -81,63 +81,79 @@ void SerialLink::handle() {
   memcpy(key, buffer, split);
   key[split] = 0;
 
-#if 1
-
   if(buffer[split] == _splitChar){
     // query value
     if (buffer[split+1] == _queryChar) {
-
       if (_onGet) {
-        bool response = _onGet(key);
+        bool response = onGetDemux(key);
         if (_doACK) {
-          //                    if (!response) sendInvalid();
+          if (!response) sendInvalid();
         }
       }
-
-      // set value
-    } else {
-
+    } else { // set value
       long value = 0;
       while (char c = buffer[++split]) {
         value = 10 * value + c - '0';
       }
       if (_onSet) {
-        bool response = _onSet(key, value);
+        bool response = onSetDemux(key, value);
         if (_doACK) {
-          //         response ? sendOK() : sendInvalid();
+          response ? sendOK() : sendInvalid();
         }
       }
     }
-  }
-#if 1
-  else if(buffer[split] == _base64Char){
+  } else if(buffer[split] == _base64Char){
     int len = rbase64_dec_len((char*)&buffer[split+1], length - (split));
     char base64dec[len];
     len = rbase64_decode(base64dec, (char*)&buffer[split+1], length - (split));
     if (_onSetByteStream) {
-      bool response = _onSetByteStream(key, base64dec, len);
-//      if (_doACK) {
-//        //                response ? sendOK() : sendInvalid();
-//      }
+      bool response = onSetByteStreamDemux(key, base64dec, len);
+      if (_doACK) {
+        response ? sendOK() : sendInvalid();
+      }
     }
   }
-#endif
-#endif
 }
 
+bool SerialLink::onGetDemux(char *key) {
+  for (char i = 0; i < _onGetNo; i++) {
+    bool r = _onGet[i](key);
+    if(r) return true;
+  }
+  return false;
+}
 
+bool SerialLink::onSetDemux(char *key, long payload) {
+  for (char i = 0; i < _onSetNo; i++) {
+    bool r = _onSet[i](key, payload);
+    if(r) return true;
+  }
+  return false;
+}
 
+bool SerialLink::onSetByteStreamDemux(char *key, char *payload , size_t payload_size) {
+  for (char i = 0; i < _onSetByteStreamNo; i++) {
+    bool r = _onSetByteStream[i](key, payload, payload_size);
+    if(r) return true;
+  }
+  return false;
+}
 
 void SerialLink::onGet(bool (*callback)(char * command)) {
-    _onGet = callback;
+  if(_onGetNo == NUMBER_CALLBACKS) return;
+  _onGet[_onGetNo++] = callback;
 }
 
 void SerialLink::onSet(bool (*callback)(char * command, long payload)) {
-    _onSet = callback;
+  if(_onSetNo == NUMBER_CALLBACKS) return;
+  _onSet[_onSetNo++] = callback;
 }
 void SerialLink::onSetByteStream(bool (*callback)(char * command, char * payload, size_t payload_size)) {
-    _onSetByteStream = callback;
+  if(_onSetByteStreamNo == NUMBER_CALLBACKS) return;
+  _onSetByteStream[_onSetByteStreamNo++] = callback;
 }
+
+
 
 void SerialLink::clear() {
     _serial->write(_terminateChar);
@@ -173,13 +189,24 @@ bool SerialLink::send(const char * command, long payload, bool doACK) {
 
 }
 
+extern volatile uint8_t gcurrent;
+extern volatile uint8_t gicurrent;
+
 bool SerialLink::sendByteStream(const char * command, const char * payload,
                                 size_t payload_length, bool doACK) {
   char * buffer = gBuffer;
     int pos = sprintf(buffer, "%s%c", command, _base64Char);
     rbase64_encode(&buffer[pos], (char *)payload, payload_length);
 
+    if (gcurrent != gicurrent) {
+      Serial.println("OFOFOFOOFoofofofoOFOFOFO");
+    }
+
     sendRaw(buffer);
+
+    if (gcurrent != gicurrent) {
+      Serial.println("mmmmmmmmmmmmmmmmmmmm");
+    }
 
     bool response = !doACK;
     if (doACK) {

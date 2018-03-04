@@ -31,6 +31,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define DEFAULT_BASE64_CHAR     '@'
 #define DEFAULT_QUERY_CHAR      '?'
 #define MAX_BUFFER_SIZE         (100)
+#define NUMBER_CALLBACKS 5
+
+typedef bool (*callbackOnGet)(char *);
+typedef bool (*callbackOnSet)(char *, long);
+typedef bool (*callbackOnSetByteStream)(char *, char *, size_t);
+
 
 class SerialLink {
 
@@ -71,9 +77,17 @@ class SerialLink {
         char _splitChar = DEFAULT_SPLIT_CHAR;
         char _base64Char= DEFAULT_BASE64_CHAR;
         char _queryChar = DEFAULT_QUERY_CHAR;
-        bool (*_onGet)(char *) = NULL;
-        bool (*_onSet)(char *, long) = NULL;
-        bool (*_onSetByteStream)(char *, char *, size_t) = NULL;
+
+        bool onGetDemux(char *);
+        bool onSetDemux(char *, long);
+        bool onSetByteStreamDemux(char *, char *, size_t);
+
+        callbackOnGet _onGet[NUMBER_CALLBACKS] = {NULL};
+        callbackOnSet _onSet[NUMBER_CALLBACKS] = {NULL};
+        callbackOnSetByteStream _onSetByteStream[NUMBER_CALLBACKS] = {NULL};
+        char _onGetNo = 0;
+        char _onSetNo = 0;
+        char _onSetByteStreamNo = 0;
 
         int readMessage(byte * buffer);
 };
