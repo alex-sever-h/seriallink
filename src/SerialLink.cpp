@@ -189,32 +189,19 @@ bool SerialLink::send(const char * command, long payload, bool doACK) {
 
 }
 
-extern volatile uint8_t gcurrent;
-extern volatile uint8_t gicurrent;
-
 bool SerialLink::sendByteStream(const char * command, const char * payload,
                                 size_t payload_length, bool doACK) {
   char * buffer = gBuffer;
     int pos = sprintf(buffer, "%s%c", command, _base64Char);
     rbase64_encode(&buffer[pos], (char *)payload, payload_length);
 
-    if (gcurrent != gicurrent) {
-      Serial.println("OFOFOFOOFoofofofoOFOFOFO");
-    }
-
     sendRaw(buffer);
-
-    if (gcurrent != gicurrent) {
-      Serial.println("mmmmmmmmmmmmmmmmmmmm");
-    }
 
     bool response = !doACK;
     if (doACK) {
-
         byte b[3];
         int length = _serial->readBytesUntil(_terminateChar, b, 3);
         if (length == 2 && b[0] == 'O' && b[1] == 'K') response = true;
-
     }
 
     return response;
