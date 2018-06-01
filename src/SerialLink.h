@@ -31,7 +31,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define DEFAULT_BASE64_CHAR     '@'
 #define DEFAULT_QUERY_CHAR      '?'
 #define MAX_BUFFER_SIZE         (100)
-#define NUMBER_CALLBACKS 5
+#define NUMBER_CALLBACKS          (5)
+#define DEFAULT_TIMEOUT          (10)
 
 typedef bool (*callbackOnGet)(char *);
 typedef bool (*callbackOnSet)(char *, long);
@@ -44,6 +45,7 @@ class SerialLink {
 
         SerialLink(Stream& serial,
             bool doACK = true,
+            int timeout = DEFAULT_TIMEOUT,
             char splitChar = DEFAULT_SPLIT_CHAR,
             char queryChar = DEFAULT_QUERY_CHAR,
             char terminateChar = DEFAULT_TERMINATE_CHAR,
@@ -77,6 +79,7 @@ class SerialLink {
         char _splitChar = DEFAULT_SPLIT_CHAR;
         char _base64Char= DEFAULT_BASE64_CHAR;
         char _queryChar = DEFAULT_QUERY_CHAR;
+        int _timeout = DEFAULT_TIMEOUT;
 
         bool onGetDemux(char *);
         bool onSetDemux(char *, long);

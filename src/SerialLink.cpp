@@ -27,13 +27,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 static char gBuffer[MAX_BUFFER_SIZE];
 
-SerialLink::SerialLink(Stream& serial, bool doACK, char splitChar, char queryChar, char terminateChar, char base64Char): _serial(&serial) {
+SerialLink::SerialLink(Stream& serial, bool doACK, int timeout,
+                       char splitChar, char queryChar, char terminateChar,
+                       char base64Char): _serial(&serial) {
     _doACK = doACK;
     _splitChar = splitChar;
     _base64Char = base64Char;
     _queryChar = queryChar;
     _terminateChar = terminateChar;
-    _serial->setTimeout(1);
+    _timeout = timeout;
+    _serial->setTimeout(_timeout);
 }
 
 int SerialLink::readMessage(byte * buffer) {
@@ -43,7 +46,7 @@ int SerialLink::readMessage(byte * buffer) {
   if (count <= 1)
     return 0;
 
-  _serial->setTimeout(1);
+  _serial->setTimeout(_timeout);
   int length = _serial->readBytesUntil(_terminateChar, buffer, MAX_BUFFER_SIZE-1);
   if (length <= 1)
     return 0;
